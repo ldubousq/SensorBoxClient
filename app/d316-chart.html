@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Les séries chronologiques de la salle D-316 ENSIMAG</title>
+  <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+  <script>
+  google.load("jquery", "1.7.0");
+  </script>
+  <script type="text/javascript">
+  google.load('visualization', '1.0', {
+    'packages': ["corechart", 'gauge']
+  });
+  google.setOnLoadCallback(initialize);
+  var charts = new Object(); //Set of charts
+  var chartOpts = new Object(); //Set of chart options
+
+  //initialize the charts and update the data
+  function initialize() {
+    var date = getDate();
+    $("#date").text(date);
+    setLinks(date);
+
+    var width = 400;
+    var height = 200;
+    createLineChart("light", 0, 1000, width, height, "gold");
+    createLineChart("sound", 30, 70, width, height, "blue");
+    createLineChart("temperature", 0, 40, width, height, "orange");
+    createLineChart("humidity", 0, 100, width, height, "cyan");
+    createLineChart("gasPressure", 98, 101, width, height, "green");
+    createLineChart("window2", 0, 2, width, height, "black");
+    createLineChart("motion", 0, 2, width, height, "purple");
+
+    //Prepare a column chart for sound sensor
+    update(date);
+  }
+
+  function getDateStr(date) {
+    var dateStr = date.getFullYear() + "-" +
+      ("0" + (date.getMonth() + 1)).slice(-2) + "-" +
+      ("0" + date.getDate()).slice(-2);
+    return dateStr;
+
+  }
+
+  function setLinks(date) {
+    var fileName = getFileName(location.href);
+
+    var calSrc =
+      "<form action=\"" + fileName + "\" method=\"get\">" +
+      "date : <input name=\"date\" type=\"date\" value=\"" + date + "\">" +
+      "<input type=\"submit\" value=\"aller\"> </form>";
+    $("#calendar").html(calSrc);
+
+
+    //Date object for the given date
+    var d = new Date(date);
+    //Obtain tomorrow
+    d.setDate(d.getDate() + 1);
+    var tomorrow = getDateStr(d);
+
+    //Obtain yesterday from tomorrow
+    d.setDate(d.getDate() - 2);
+    var yesterday = getDateStr(d);
+
+    var nextSrc = "<a href=\"" + fileName + "?date=" + tomorrow + "\"> demain =></a>";
+    $("#next").html(nextSrc);
+    var prevSrc = "<a href=\"" + fileName + "?date=" + yesterday + "\"> <= hier</a>";
+    $("#prev").html(prevSrc);
+  }
+
+  function getFileName(file_url) {
+    file_url = file_url.substring(file_url.lastIndexOf("/") + 1, file_url.length);
+    // 拡張子を取り除かない場合は次の行をコメントアウトしてください
+    if (file_url.indexOf("?") != -1) {
+      file_url = file_url.substring(0, file_url.indexOf("?"));
+    }
+    return file_url;
+  }
+
+  //Obtain the specified date. Default is today.
+  function getDate() {
+
+    //Obtain date string yyyy-mm-dd of today
+    var now = new Date();
+    var date = now.getFullYear() + "-" +
+      ("0" + (now.getMonth() + 1)).slice(-2) + "-" +
+      ("0" + now.getDate()).slice(-2);
+
+    //Check if "date" is specified in the url
+    var url = location.href;
+    if (url.indexOf("?") != -1) {
+      var params = url.split("?")[1].split("&");
+      var paramKvs = new Object();
+      for (var i = 0; i < params.length; i++) {
+        var kv = params[i].split("=");
+        paramKvs[kv[0]] = kv[1];
+      }
+      if (paramKvs["date"].match(/^\d\d\d\d-\d\d-\d\d$/)) {
+        date = paramKvs["date"];
+      }
+    }
+
+    return date;
+  }
+
+  // Update all charts
+  function update(date) {
+    getData(date, "light", 600);
+    getData(date, "temperature", 600);
+    getData(date, "humidity", 600);
+    getData(date, "sound", 60);
+    getData(date, "gasPressure", 600);
+    getData(date, "window2", 600);
+    getData(date, "motion", 6);
+
+    //Refresh the graphs every 10 min
+    setTimeout(function(d) {
+      update(d);
+    }, 600000, date);
+  }
+
+  //Create a line chart by the given parameters
+  function createLineChart(property, min, max, width, height, color) {
+    charts[property] = new google.visualization.LineChart(
+      document.getElementById(property));
+    chartOpts[property] = {
+      'min': min,
+      'max': max,
+      'width': width,
+      'height': height,
+      'vAxis.viewWindowMode': 'pretty',
+      'legend': {
+        position: "none"
+      },
+      'colors': [color],
+    };
+  }
+
+  //Retrieve data from TimeSeriesDataService for specified date and property
+  function getData(date, property, step) {
+    var url = "http://133.30.159.3:8080/axis2/services/HBaseDataService/getData" +
+      "?since=" + date +
+      "T&until=" + date +
+      "Z&property=" + property +
+      "&step=" + step;
+    console.log(url);
+    //------------  Get values from sensors and update graphs ----------//
+    jQuery.ajax({
+      url: url,
+      type: 'GET',
+      dataType: 'xml',
+      cache: false,
+      success: function(xml, jqXHR) {
+        if (xml == "null") {
+          console.log("No data retrieved.");
+        } else {
+          var arr = new Array(); // array of time-series data
+          arr[0] = ["Time", property];
+          var i = 1;
+          $(xml).find('list').each(function() {
+            var time = $(this).find('time').text().substr(11, 5);
+            var value = $(this).find('value').text();
+            //Obtain numeric value from the data
+            var numeric = getNumericValue(property, value);
+            arr[i] = [time, numeric];
+            i++;
+          });
+          drawChart(date, property, arr);
+        }
+      },
+      error: function(textStatus) {
+        console.log("Could not connect the API.");
+      }
+    });
+  }
+
+  //Convert a given string value to a numeric value
+  function getNumericValue(property, value) {
+    var numeric;
+    switch (property) {
+      case "window0":
+      case "window1":
+      case "window2":
+        numeric = (value == "open") ? 2 : 1;
+        break;
+      case "motion":
+        numeric = (value == "true") ? 2 : 1;
+        break;
+      default:
+        numeric = parseFloat(value);
+    }
+    return numeric;
+  }
+
+  //Draw a chart of the property on the date based on the given data
+  function drawChart(date, property, arr) {
+    var data = google.visualization.arrayToDataTable(arr);
+    //console.log("Drawing " + property + " chart on " + date);
+    var chart = charts[property];
+    var options = chartOpts[property];
+    options["title"] = property + " on " + date;
+    chart.draw(data, options);
+  }
+  </script>
+  <style type="text/css">
+  <!-- #header {
+    border-style: none none solid none;
+    border-color: #dcdcdc;
+    margin: 0 0 0 0;
+    padding: 0px 0px 10px 10px;
+  }
+  
+  #footer {
+    border-style: solid none none none;
+    border-color: #dcdcdc;
+    margin: 0 0 0 0;
+    padding: 10px 0px 0px 10px;
+  }
+  
+  #content {
+    overflow: hidden;
+    padding: 20px 0 20px 10px;
+  }
+  
+  #content p {
+    text-align: center;
+    font-size: 150%;
+    float: left;
+    width: 400px;
+    margin: 0 10px 10px 0;
+  }
+  
+  //-->
+  </style>
+</head>
+
+<body>
+  <div id="wrapper">
+    <div id="header">
+      <H1>
+    Les séries chronologiques de capteurs
+    </H1>
+      <p>
+        dans D-316 ENSIMAG le <span id="date"></span>
+      </p>
+      <table border=0 width=100% bgcolor="#D6F384">
+        <tr>
+          <th width=33% align="left" id="prev"></th>
+          <th width=34% align="center" id="calendar"></th>
+          <th width=33% align="right" id="next"></th>
+        </tr>
+      </table>
+    </div>
+    <div id="content">
+      <p><span id="light"></span></p>
+      <p><span id="sound"></span></p>
+      <p><span id="temperature"></span></p>
+      <p><span id="humidity"></span></p>
+      <p><span id="gasPressure"></span></p>
+      <p><span id="window2"></span></p>
+      <p><span id="motion"></span></p>
+    </div>
+    <div id="footer">
+      (C) 2015 Masahide Nakamura, CS27 Kobe University. All rights reserved.
+    </div>
+</body>
+
+</html>

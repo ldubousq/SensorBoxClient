@@ -1,0 +1,87 @@
+// bower:scss
+// endbower
+.browserupgrade {
+    margin: 0.2em 0;
+    background: #ccc;
+    color: #000;
+    padding: 0.2em 0;
+}
+
+
+/* Space out content a bit */
+
+body {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+
+header h1 {
+    font-size: 1em;
+}
+
+header p {
+    font-size: 1em;
+}
+
+#fan > div {
+    height: 250px;
+    position: relative;
+}
+
+#fan > div > div {
+    width: 120px;
+    height: 100px;
+    border-style: solid;
+    position: absolute;
+    margin: auto;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-color: #dddddd;
+    font-size: 80%;
+}
+
+.perspective {
+    background: url("../images/doorBorder.png");
+    background-repeat: no-repeat;
+    background-position: center center;
+    position: relative;
+    display: inline;
+    float: left;
+    height: 274px;
+    width: 147px;
+    margin: 20px;
+    margin-left: 0px;
+    -webkit-perspective: 450;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+
+.thumb {
+    background: url("../images/ClassDoor.png");
+    background-repeat: no-repeat;
+    background-position: center center;
+    width: 147px;
+    height: 274px;
+    position: absolute;
+    box-sizing: border-box;
+    border-radius: 3px;
+    box-shadow: 0 0 0 10px rgba(255, 255, 255, .0) inset;
+    transition: 1s transform linear;
+    transform-origin: left;
+    cursor: pointer;
+}
+
+.thumbOpened {
+    transform: rotateY(-90deg);
+    transform-origin: 8px;
+    transition: .5s linear;
+}
+
+@keyframes go {
+    100% {
+        opacity: 1;
+        transform: rotateY(0deg);
+    }
+}

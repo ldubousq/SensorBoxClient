@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<!--
+ d316.html: センサボックスモニタ
+ SensorBox + REST + GoogleChart でD-316の現在のセンサ値を可視化するWebアプリ．
+
+ 2015-03-12  (C) Masahide Nakamura
+
+ ChangeLog
+ 2015-03-12 Masahide Nakamura <masa-n@cs.kobe-u.ac.jp>
+   * とりあえず照度センサから
+ 2015-03-13 Masahide Nakamura <masa-n@cs.kobe-u.ac.jp>
+   * サウンドセンサ＠棒グラフを追加．リフレッシュレートを変更できるようにした．
+   * 共通部分をまとめた
+
+-->
+	<head>
+		<meta charset="UTF-8" />
+		<title>Etats de la Salle D-316 ENSIMAG</title>
+
+		<!------------------------------- Sctript starts here -------------------------------->
+		<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+		<script>google.load("jquery", "1.7.0");</script>
+		<script type="text/javascript" type="text/javascript">
+			// Some global variables here
+			var charts = new Object();     //Set of charts
+			var chartOpts = new Object();  //Set of chart options
+			var refmSec = 1000;            //Refresh interval in ms 
+			var ids = ["force", "gasPressure", "humidity", "light", "sound",
+				"temperature", "vibration"];
+
+			// Load the Visualization API library and add package name.
+			google.load( 'visualization', '1.0', { 'packages' :[ "corechart" , 'gauge'] });
+			google.setOnLoadCallback( initialize );
+			
+			// Prepare charts and call getValue()
+			function initialize () {
+				//Prepare a gauge chart for light sensor
+				charts["light"] = new google.visualization.Gauge(document.getElementById('light'));
+				chartOpts["light"] = {'min':0, 'max':1000, 'yellowFrom':600, 'yellowTo':800,
+					'redFrom':800, 'redTo':1000, 'minorTicks':20, 'width':200, 'height':200};
+				
+				//Prepare a column chart for sound sensor
+				charts["sound"] = new google.visualization.ColumnChart(
+						        document.getElementById('sound'));
+				chartOpts["sound"] = {'min':0, 'max':70,'width':250, 'height':250,
+									'legend': {position:"none"}};
+				
+				//Prepare a column chart for temperature sensor
+				charts["temperature"] = new google.visualization.ColumnChart(
+						        document.getElementById('temperature'));
+				chartOpts["temperature"] = {'min':0, 'max':40,'width':250, 'height':250,
+									'legend': {position:"none"}};
+				//Prepare a column chart for temperature sensor
+				charts["humidity"] = new google.visualization.ColumnChart(
+						        document.getElementById('humidity'));
+				chartOpts["humidity"] = {'min':0, 'max':100,'width':250, 'height':250,
+									'legend': {position:"none"}};
+									
+				setRefreshRate(1000);
+				getValue();
+			}
+
+			//Obtain sensor values by REST. Call updateValues() when succeeded.
+			function getValue() {
+				var sboxAddr = "http://129.88.49.247:8080/axis2/services/"
+					+ "SensorBoxService/getAllValues"; // REST API endpoint
+				jQuery.ajax({
+					url: sboxAddr,
+					type: 'GET',
+					dataType: 'xml',
+					cache: false,
+					success: function(data, jqXHR) {
+						if (data=="null") {
+							alert ("No data retrieved.");
+						} else {
+							var date = new Date();
+							$("#now").text(date.toLocaleString());
+							updateValues(data);
+						}
+					},
+					error: function(textStatus) {
+						alert ("Could not connect the API.");
+					}
+				});
+				setTimeout("getValue()",refmSec);
+			}
+
+			//Update the current sensor values for the charts
+			function updateValues(xml) {
+				var keyValue = new Object(); // map {id:value} of sensor values
+				
+				$(xml).find('return').each(function() {
+					var id = $(this).find('id').text();
+					var value = $(this).find('value').text();
+					keyValue[id] = value;
+				});
+				
+				drawGraphs(keyValue); //Redraw graphs based on the map
+			}
+			
+			//Draw graphs for given values of sensors
+			function drawGraphs(keyValue) {
+				for (var k in keyValue) {
+					var data = new Array();
+					switch (k) {
+						case "light":
+							data[0] = ['lux'];
+							data[1] = [parseInt(keyValue[k])];
+							dt = google.visualization.arrayToDataTable(data);
+					    	charts[k].draw(dt, chartOpts[k]);
+							break;
+						case "sound":
+							data[0] = [ '', 'db' , { role: 'annotation' }];
+							data[1] = ['Sound Volume', parseFloat(keyValue[k]), Math.round(parseFloat(keyValue[k])*100)/100 + ' db'];
+							dt = google.visualization.arrayToDataTable(data);
+							charts[k].draw(dt, chartOpts[k]);
+							break;
+						case "temperature":
+							data[0] = [ '', 'C' , { role: 'annotation' }, {role: 'style'}];
+							data[1] = ['Temperature', parseFloat(keyValue[k]), Math.round(parseFloat(keyValue[k])*100)/100 + ' C', 'color: orange'];
+							dt = google.visualization.arrayToDataTable(data);
+							charts[k].draw(dt, chartOpts[k]);
+							break;
+						case "humidity":
+							data[0] = [ '', 'C' , { role: 'annotation' }, {role: 'style'}];
+							data[1] = ['Humidity', parseFloat(keyValue[k]), Math.round(parseFloat(keyValue[k])*100)/100 + ' %', 'color: cyan'];
+							dt = google.visualization.arrayToDataTable(data);
+							charts[k].draw(dt, chartOpts[k]);
+							break;
+						default:
+							console.log (k + "=" + keyValue[k]);
+					}
+				}
+			}
+			
+		//Change the refresh rate
+		function setRefreshRate(newValue) {
+			refmSec = newValue;
+			$("#refRate").text(newValue);
+		}
+		</script>
+		<!------------------------------- Sctript ends here -------------------------------->
+	</head>
+
+	<body>
+	<h1>Etats de la Salle D-316 ENSIMAG</h1>
+	<hr>
+	<p>IL EST <span id="now"></span>.
+	</p>
+	<p>
+		Taux de Rafraîchissement: <input type="range" min="100" max="1000" value="1000" step="100"
+						onchange="setRefreshRate(this.value)"/>
+						<span id="refRate"></span> msec
+	</p>
+	<table>
+		<tr>
+			<th>luminosité</th>
+			<th>volume sonore</th>
+			<th>température</th>
+			<th>humidité</th>
+		</tr>
+		<tr>
+			<td><div id="light"> </div></td>
+			<td><div id="sound"> </div></td>
+			<td><div id="temperature"> </div></td>
+			<td><div id="humidity"> </div></td>
+		</tr>
+	</table>
+	<hr>
+	<i>(C) 2015 Masahide Nakamura, CS27 Kobe University. All rights reserved.</i>
+	</body>
+</html>
+
+
